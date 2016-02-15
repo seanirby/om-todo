@@ -1,3 +1,4 @@
+;;** Namespace / Deps
 (ns om-tutorial.core
   (:require [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
@@ -6,23 +7,50 @@
 
 (enable-console-print!)
 
+;;** App State
 (def app-state
   (atom {:lst [{:content "Me third"
                 :priority 3}
-               {:content "Me first"
-                :priority 0}
                {:content "Me second"
                 :priority 1}]}))
 
+;; Mutate functions
+(defmulti mutate om/dispatch)
+
+(defmethod mutate 'todo/remove!
+  [{:keys [state]} key _]
+  {:action
+   (fn []
+     (swap! app-state update-in
+       [:lst]
+       (fn [l]
+         (filter #(not (% key)) l))))})
+
+;; Read functions
+(defn read
+  [{:keys [state] :as env} key params]
+  (let [st @state]
+    (if-let [[_ v] (find st key)]
+      {:value v}
+      {:value :not-found})))
+
+;;** Todo
+(defn todo-remove-click-handler [component priority e]
+  (println "removing")
+  (println component)
+  (println priority)
+  (om/transact! component `[(todo/remove! {:priority ~priority})]))
+
 (defui Todo
+  static om/IQuery
+  (query [this]
+    [:content :priority])
   Object
   (render [this]
-    (let [{:keys [content]} (om/props this)]
-      (if (= "" dom)
-        (content/input nil )
-        (dom/div nil 
-          (dom/span nil content)
-          (dom/button nil "Remove"))))))
+    (let [{:keys [content priority]} (om/props this)]
+      (dom/div nil 
+        (dom/span nil content)
+        (dom/button #js {:onClick (partial todo-remove-click-handler this priority)} "Remove")))))
 
 (def todo (om/factory Todo {:keyfn :priority}))
 
@@ -34,9 +62,13 @@
         (map todo (sort-by :priority lst)))
       )))
 
+;;** Reconciler
 (def reconciler
-  (om/reconciler {:state app-state}))
+  (om/reconciler {:state app-state
+                  :read read
+                  :mutate mutate}))
 
+;;** App Mounting
 (om/add-root! reconciler
   TodoList (gdom/getElement "app"))
 
