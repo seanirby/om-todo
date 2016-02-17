@@ -8,6 +8,12 @@
 (declare om-person)
 
 (defui Person
+  static om/Ident
+  (ident [this props]
+    [:db/id (:db/id props)])
+  static om/IQuery
+  (query [this]
+    [:db/id :person/name :person/mate])
   ;; TODO: Add a query for :db/id, :person/name, and a recursive access of :person/mate
   ;; TODO: Add an ident that uses :db/id
   Object
@@ -16,6 +22,7 @@
     (let [{:keys [person/name person/mate]} (om/props this)
           {:keys [onDelete]} (om/get-computed this)
           checked (om/get-state this :checked)]
+      (println (om/props this))
       (dom/li nil
         (dom/input #js {:type    "checkbox"
                         :onClick #(om/update-state! this update :checked not)
@@ -30,6 +37,9 @@
 (def om-person (om/factory Person {:keyfn :db/id}))
 
 (defui PeopleWidget
+  static om/IQuery
+  (query [this]
+    [:people])
   Object
   (render [this]
     (let [people (-> (om/props this) :people)
@@ -45,6 +55,9 @@
 (def people-widget (om/factory PeopleWidget))
 
 (defui Root
+  static om/IQuery
+  (query [this]
+    [:widget :new-person :last-error])
   ;; TODO: Add root query. Remember to include top-level properties and compose in PeopleWidget
   Object
   (render [this]
