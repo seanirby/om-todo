@@ -1,4 +1,4 @@
-;;** Namespace / Deps
+;;** Namespace/Deps
 (ns om-tutorial.core
   (:require [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
@@ -62,7 +62,7 @@
   [{:keys [state] :as env} key params]
   {:value (get-todo state key)})
 
-;; Read functions
+;;** Read functions
 (defmethod read :default
   [{:keys [state] :as env} key params]
   (let [st @state]
@@ -70,28 +70,61 @@
       {:value v}
       {:value :not-found})))
 
-;;why is priority 2 getting mutated.
+;;** Helpers
+(defn display [show]
+  (if show
+    #js {}
+    #js {:display "none"}))
 
+(defn react-find-dom-node [obj]
+  (.findDOMNode js/ReactDOM obj))
+
+;;** Components
 (defui Todo
   static om/Ident
   (ident [this {:keys [priority content]}]
     [:todos/bypriority priority])
   static om/IQuery
   (query [this]
-    [:content :content-edit :priority])
+    [:content :priority])
   Object
+  ;; TODO need to focus here so the object is visible
+  (componentDidUpdate [this _ _]
+    (let [content-edit (-> (om/get-state this) :content-edit)]
+      ;; TODO check if not focused
+      (when content-edit
+        (.focus (react-find-dom-node (aget (.. this -refs) "todo-input")))
+        )))
+  (initLocalState [this] {:content-edit nil})
   (render [this]
-    (let [{:keys [content content-edit priority]} (om/props this)]
-      (println "rerendering todo")
+    (let [{:keys [content priority] :as props} (om/props this)
+          {:keys [content-edit] :as props-local} (om/get-state this)]
       (dom/div nil 
-        (if content-edit
-          (dom/input #js {:value content-edit})
-          (dom/span #js {:onClick (fn [e]  (om/transact! this `[(todo/edit-init! {:priority ~priority})]))} content))
+        (dom/span #js {:style (display (not content-edit))
+                       :onClick (fn [e]
+                                  ;; Set local state
+                                  (om/update-state! this update :content-edit #(identity ""))
+                                  ;; Focus input
+;;                                  (.focus (react-find-dom-node (aget (.. this -refs) "todo-input")))
+                                  )
+                       :value content-edit
+                       } content)
+        (dom/input #js {
+                        :value content-edit
+                        :style (display content-edit)
+                        :onChange (fn [e] (om/update-state! this update :content-edit #(.. e -target -value)))
+                        ;; TODO add todo in addition to unfocusing
+                        :onBlur (fn [e]
+                                  (if-not (empty? content-edit)
+                                    (om/transact! this `[(todo/commit! {:content ~content-edit})])
+                                    (om/update-state! this update :content-edit #(identity nil)))
+                                  )
+                        :ref "todo-input"
+                        })
         (dom/button #js {:onClick (fn [e]  (om/transact! this `[(todo/remove! {:priority ~priority})   :todos]))} "Remove")))))
 
 (def todo (om/factory Todo {:keyfn :priority}))
 
-;;** Reconciler
 (defui Todos
   static om/IQuery
   (query [this]
@@ -99,10 +132,10 @@
       `[{:todos ~subquery1}]))
   Object
   (render [this]
-    (println "rendering todos")
     (let [{:keys [todos] :as env} (om/props this)]
       (dom/div nil (apply dom/div nil (map todo (sort-by :priority todos)))))))
 
+;;** Reconciler
 (def reconciler
   (om/reconciler {:normalize true
                   :state app-state
